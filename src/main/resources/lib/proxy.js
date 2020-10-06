@@ -1,0 +1,73 @@
+const mustache = require('/lib/mustache');
+const http = require('/lib/http-client');
+
+const stat_endpoint = 'http://localhost:2609'
+
+function stat_req(endpoint) {
+    try {
+        return JSON.parse(http.request({
+            url: stat_endpoint + endpoint,
+            connectionTimeout: 2000,
+            readTimeout: 2000,
+        }).body);
+    } catch (e) {
+        return undefined;
+    }
+}
+
+function get_es_member(id, members) {
+    for (let i = 0; i < members.length; i++) {
+        if (members[i].id === id) {
+            return members[i];
+        }
+    }
+    return undefined;
+}
+
+exports.handle = function (req) {
+    let server = stat_req('/server');
+    let xp = {};
+    if (server) {
+        xp = {
+            version: server.version,
+            hash: server.build.hash,
+        };
+    }
+
+    let es = stat_req('/cluster.elasticsearch');
+    let node = {};
+
+    if (es) {
+        let member = get_es_member(es.localNode.id, es.members);
+
+        node = {
+            clusterName: es.name,
+            nodeId: es.localNode.id,
+            nodeName: member.name,
+            nodeIsMaster: member.isMaster,
+            nodeIsDataNode: member.isDataNode,
+            nodeIsClientNode: member.isClientNode,
+        };
+    }
+
+    if (req.headers['Accept'] && req.headers['Accept'].contains('text/html')) {
+        const view = resolve('../assets/main.html');
+        return {
+            contentType: 'text/html',
+            body: mustache.render(view, {
+                request: JSON.stringify(req, undefined, 2),
+                node: JSON.stringify(node, undefined, 2),
+                xp: JSON.stringify(xp, undefined, 2),
+            }),
+        }
+    }
+
+    return {
+        contentType: 'text/json',
+        body: {
+            request: req,
+            node: node,
+            xp: xp,
+        },
+    };
+}

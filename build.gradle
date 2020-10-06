@@ -1,0 +1,24 @@
+plugins {
+    id 'com.enonic.xp.app' version '2.0.0'
+}
+
+app {
+    name = project.appName
+    displayName = 'Proxy Debug'
+    vendorName = 'Enonic AS'
+    vendorUrl = 'https://enonic.com'
+    systemVersion = "${xpVersion}"
+}
+
+dependencies {
+    compile "com.enonic.xp:core-api:${xpVersion}"
+    compile "com.enonic.xp:portal-api:${xpVersion}"
+    include 'com.enonic.lib:lib-http-client:2.1.2'
+    include "com.enonic.lib:lib-mustache:2.0.0"
+}
+
+repositories {
+    mavenLocal()
+    jcenter()
+    xp.enonicRepo()
+}
