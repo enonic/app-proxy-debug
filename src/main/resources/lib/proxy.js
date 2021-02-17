@@ -50,6 +50,17 @@ exports.handle = function (req) {
         };
     }
 
+    if (req.params['stall']) {
+        try
+        {
+            java.lang.Thread.sleep(req.params['stall']);
+        }
+        catch (e)
+        {
+            // Ignore
+        }
+    }
+
     if (req.headers['Accept'] && req.headers['Accept'].contains('text/html')) {
         const view = resolve('../assets/main.html');
         return {
