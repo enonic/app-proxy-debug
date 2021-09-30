@@ -1,5 +1,6 @@
 const mustache = require('/lib/mustache');
 const http = require('/lib/http-client');
+const util = require('/lib/util');
 
 const stat_endpoint = 'http://localhost:2609'
 
@@ -24,7 +25,7 @@ function get_es_member(id, members) {
     return undefined;
 }
 
-exports.handle = function (req) {
+function handle200(req) {
     let server = stat_req('/server');
     let xp = {};
     if (server) {
@@ -51,18 +52,15 @@ exports.handle = function (req) {
     }
 
     if (req.params['stall']) {
-        try
-        {
+        try {
             java.lang.Thread.sleep(req.params['stall']);
-        }
-        catch (e)
-        {
+        } catch (e) {
             // Ignore
         }
     }
 
-    if (req.headers['Accept'] && req.headers['Accept'].contains('text/html')) {
-        const view = resolve('../assets/main.html');
+    if (util.returnHtml(req)) {
+        const view = resolve('../assets/200.html');
         return {
             contentType: 'text/html',
             body: mustache.render(view, {
@@ -81,4 +79,30 @@ exports.handle = function (req) {
             xp: xp,
         },
     };
+}
+
+function handle403(req) {
+    if (util.returnHtml(req)) {
+        const view = resolve('../assets/403.html');
+        return {
+            status: 403,
+            contentType: 'text/html',
+            body: mustache.render(view, {}),
+        }
+    }
+
+    return {
+        status: 403,
+        contentType: 'text/json',
+        body: {
+            message: 'unauthorized'
+        },
+    };
+}
+
+exports.handle = function (req) {
+    if (!util.isMember("role:system.admin")) {
+        return handle403(req);
+    }
+    return handle200(req);
 }
