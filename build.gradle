@@ -1,5 +1,7 @@
 plugins {
+    id 'maven-publish'
     id 'com.enonic.xp.app' version '3.0.0'
+    id 'com.enonic.defaults' version '2.0.1'
 }
 
 app {
@@ -20,6 +22,6 @@ dependencies {
 
 repositories {
     mavenLocal()
-    jcenter()
-    xp.enonicRepo()
+    mavenCentral()
+    xp.enonicRepo( 'dev' )
 }
