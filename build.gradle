@@ -1,23 +1,15 @@
 plugins {
     id 'maven-publish'
-    id 'com.enonic.xp.app' version '3.6.2'
+    id 'com.enonic.xp.app'
     id 'com.enonic.defaults' version '2.1.6'
 }
 
-app {
-    name = project.appName
-    displayName = 'Proxy Debug'
-    vendorName = 'Enonic AS'
-    vendorUrl = 'https://enonic.com'
-    systemVersion = "${xpVersion}"
-}
-
 dependencies {
-    implementation "com.enonic.xp:core-api:${xpVersion}"
-    implementation "com.enonic.xp:portal-api:${xpVersion}"
-    include "com.enonic.xp:lib-auth:${xpVersion}"
-    include 'com.enonic.lib:lib-http-client:3.2.2'
-    include "com.enonic.lib:lib-mustache:2.1.1"
+    implementation xplibs.api.core
+    implementation xplibs.api.portal
+    include xplibs.auth
+    include libs.lib.http.client
+    include libs.lib.mustache
 }
 
 repositories {

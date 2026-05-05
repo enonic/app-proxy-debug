@@ -1,0 +1,7 @@
+kind: "AdminTool"
+title: "Proxy Debug"
+description: "Debug incoming requests"
+allow:
+  - "role:system.admin"
+  - "role:system.admin.login"
+  - "role:system.authenticated"
