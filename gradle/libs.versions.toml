@@ -1,6 +1,6 @@
 [versions]
-http-client = "3.2.2"
-mustache    = "2.1.1"
+http-client = "4.0.0-SNAPSHOT"
+mustache    = "3.0.0-SNAPSHOT"
 
 [libraries]
 lib-http-client = { module = "com.enonic.lib:lib-http-client", version.ref = "http-client" }
