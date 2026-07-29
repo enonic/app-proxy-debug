@@ -53,7 +53,7 @@ function handle200(req) {
 
     if (req.params['stall']) {
         try {
-            java.lang.Thread.sleep(req.params['stall']);
+            require('/lib/xp/task').sleep(Number(req.params['stall']));
         } catch (e) {
             // Ignore
         }

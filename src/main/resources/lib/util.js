@@ -21,5 +21,5 @@ exports.isMember = function (key) {
 }
 
 exports.returnHtml = function (req) {
-    return req.headers['Accept'] && req.headers['Accept'].contains('text/html');
+    return req.headers['Accept'] && req.headers['Accept'].indexOf('text/html') !== -1;
 }
