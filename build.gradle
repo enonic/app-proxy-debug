@@ -8,12 +8,26 @@ dependencies {
     implementation xplibs.api.core
     implementation xplibs.api.portal
     include xplibs.auth
+    include xplibs.task
     include libs.lib.http.client
     include libs.lib.mustache
+
+    testImplementation "com.enonic.xp:testing:${xpVersion}"
+    testImplementation platform( 'org.junit:junit-bom:6.1.2' )
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 repositories {
     mavenLocal()
     mavenCentral()
     xp.enonicRepo( 'dev' )
+}
+
+test {
+    useJUnitPlatform()
+}
+
+xp {
+    scriptEngines = ['Nashorn', 'GraalJS']
 }
