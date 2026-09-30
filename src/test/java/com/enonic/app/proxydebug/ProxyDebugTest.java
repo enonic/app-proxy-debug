@@ -30,4 +30,28 @@ public class ProxyDebugTest
     {
         runFunction( "/lib/proxy-test.js", "noStallDoesNotSleep" );
     }
+
+    @Test
+    public void ackHeartbeatFlagFromParam()
+    {
+        runFunction( "/lib/proxy-test.js", "ackHeartbeatFlagFromParam" );
+    }
+
+    @Test
+    public void echoesRegularMessage()
+    {
+        runFunction( "/lib/proxy-test.js", "echoesRegularMessage" );
+    }
+
+    @Test
+    public void acksHeartbeatWhenEnabled()
+    {
+        runFunction( "/lib/proxy-test.js", "acksHeartbeatWhenEnabled" );
+    }
+
+    @Test
+    public void ignoresHeartbeatWhenAckDisabled()
+    {
+        runFunction( "/lib/proxy-test.js", "ignoresHeartbeatWhenAckDisabled" );
+    }
 }
