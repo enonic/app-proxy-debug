@@ -1,0 +1,5 @@
+kind: "API"
+title: "Proxy Debug WebSocket"
+description: "WebSocket echo endpoint for debugging proxy setups"
+allow:
+  - "role:system.admin"
