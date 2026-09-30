@@ -1,5 +1,7 @@
 const mustache = require('/lib/mustache');
 const http = require('/lib/http-client');
+const portal = require('/lib/xp/portal');
+const webSocketLib = require('/lib/xp/websocket');
 const util = require('/lib/util');
 
 const stat_endpoint = 'http://localhost:2609'
@@ -67,6 +69,7 @@ function handle200(req) {
                 request: JSON.stringify(req, undefined, 2),
                 node: JSON.stringify(node, undefined, 2),
                 xp: JSON.stringify(xp, undefined, 2),
+                wsApiPath: portal.apiUrl({api: app.name + ':websocket'}),
             }),
         }
     }
@@ -105,4 +108,47 @@ exports.handle = function (req) {
         return handle403(req);
     }
     return handle200(req);
+}
+
+exports.handleWebSocket = function (req) {
+    if (!util.isMember("role:system.admin")) {
+        return handle403(req);
+    }
+    if (!req.webSocket) {
+        return {
+            status: 426,
+            headers: {
+                'Upgrade': 'websocket',
+            },
+        };
+    }
+
+    const webSocket = {
+        subProtocols: ['text'],
+        data: {
+            request: JSON.stringify(req, undefined, 2),
+        },
+    };
+
+    if (req.params['allowAnyOrigin'] === 'true') {
+        webSocket.checkOrigin = function () {
+            return true;
+        };
+    }
+
+    if (req.params['disableSessionBinding'] === 'true') {
+        webSocket.terminateOnSessionExit = false;
+    }
+
+    return {
+        webSocket: webSocket,
+    };
+}
+
+exports.webSocketEvent = function (event) {
+    if (event.type === 'open') {
+        webSocketLib.send(event.session.id, event.data.request);
+    } else if (event.type === 'message') {
+        webSocketLib.send(event.session.id, event.message);
+    }
 }

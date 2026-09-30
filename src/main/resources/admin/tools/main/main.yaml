@@ -5,3 +5,5 @@ allow:
   - "role:system.admin"
   - "role:system.admin.login"
   - "role:system.authenticated"
+apis:
+  - "websocket"

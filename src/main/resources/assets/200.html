@@ -36,6 +36,17 @@
             display: block;
             padding: 10px;
         }
+
+        #ws-controls label {
+            font-family: monospace;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        #ws-status {
+            font-family: monospace;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -46,5 +57,148 @@
 <pre><json>{{node}}</json></pre>
 <h3>XP</h3>
 <pre><json>{{xp}}</json></pre>
+<h3>WebSocket</h3>
+<div id="ws-controls">
+    <button id="ws-test">Test WebSocket connection</button>
+    <button id="ws-close" disabled>Close</button>
+    <label><input type="checkbox" id="ws-any-origin"> Allow any origin</label>
+    <label><input type="checkbox" id="ws-keep-open"> Keep connection open</label>
+    <label><input type="checkbox" id="ws-no-session-binding"> Disable session binding</label>
+</div>
+<p id="ws-status"></p>
+<pre id="ws-request-block" hidden><json id="ws-request"></json></pre>
+<script>
+    (function () {
+        const testBtn = document.getElementById('ws-test');
+        const closeBtn = document.getElementById('ws-close');
+        const anyOrigin = document.getElementById('ws-any-origin');
+        const keepOpen = document.getElementById('ws-keep-open');
+        const noSessionBinding = document.getElementById('ws-no-session-binding');
+        const status = document.getElementById('ws-status');
+        const requestBlock = document.getElementById('ws-request-block');
+        const requestOutput = document.getElementById('ws-request');
+
+        let socket;
+        let uptimeTimer;
+        let userClosed = false;
+
+        function setStatus(text) {
+            status.textContent = text;
+        }
+
+        closeBtn.addEventListener('click', function () {
+            if (socket) {
+                userClosed = true;
+                socket.close(1000);
+            }
+        });
+
+        testBtn.addEventListener('click', function () {
+            if (socket) {
+                socket.onclose = null;
+                socket.close(1000);
+                socket = undefined;
+            }
+            clearInterval(uptimeTimer);
+            closeBtn.disabled = true;
+            userClosed = false;
+            requestBlock.hidden = true;
+            requestOutput.textContent = '';
+
+            const params = [];
+            if (anyOrigin.checked) {
+                params.push('allowAnyOrigin=true');
+            }
+            if (noSessionBinding.checked) {
+                params.push('disableSessionBinding=true');
+            }
+            const url = (location.protocol === 'https:' ? 'wss://' : 'ws://')
+                + location.host + '{{wsApiPath}}'
+                + (params.length ? '?' + params.join('&') : '');
+            const token = 'debug-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+
+            setStatus('Connecting to ' + url + ' …');
+
+            let ws;
+            try {
+                ws = new WebSocket(url, 'text');
+            } catch (e) {
+                setStatus('✗ failed: ' + e.message);
+                return;
+            }
+            socket = ws;
+
+            let sentAt;
+            let openedAt;
+            let received = 0;
+            let echoed = false;
+
+            const echoTimeout = setTimeout(function () {
+                if (!echoed) {
+                    setStatus('✗ failed: no echo within 5 seconds');
+                    ws.close();
+                }
+            }, 5000);
+
+            ws.onopen = function () {
+                openedAt = Date.now();
+                sentAt = performance.now();
+                ws.send(token);
+            };
+
+            ws.onmessage = function (event) {
+                received++;
+                if (received === 1) {
+                    requestOutput.textContent = event.data;
+                    requestBlock.hidden = false;
+                } else if (received === 2) {
+                    if (event.data !== token) {
+                        setStatus('✗ failed: unexpected echo');
+                        ws.close();
+                        return;
+                    }
+                    echoed = true;
+                    clearTimeout(echoTimeout);
+                    const rtt = Math.round(performance.now() - sentAt);
+                    if (keepOpen.checked) {
+                        closeBtn.disabled = false;
+                        setStatus('✓ connected · round-trip ' + rtt + ' ms · open for 0 s');
+                        uptimeTimer = setInterval(function () {
+                            setStatus('✓ connected · round-trip ' + rtt + ' ms · open for '
+                                + Math.round((Date.now() - openedAt) / 1000) + ' s');
+                        }, 1000);
+                    } else {
+                        setStatus('✓ connected · round-trip ' + rtt + ' ms');
+                        ws.close(1000);
+                    }
+                }
+            };
+
+            ws.onclose = function (event) {
+                clearTimeout(echoTimeout);
+                clearInterval(uptimeTimer);
+                closeBtn.disabled = true;
+                socket = undefined;
+                const details = 'code ' + event.code + (event.reason ? ', ' + event.reason : '');
+                if (!echoed) {
+                    if (received === 0) {
+                        setStatus('✗ failed: connection rejected (' + details
+                            + ') — an origin check failure shows up here');
+                    } else if (status.textContent.indexOf('✗') !== 0) {
+                        setStatus('✗ failed: connection closed before echo (' + details + ')');
+                    }
+                } else if (keepOpen.checked) {
+                    const uptime = Math.round((Date.now() - openedAt) / 1000);
+                    if (userClosed) {
+                        setStatus('✓ closed by user after ' + uptime + ' s');
+                    } else {
+                        setStatus('⚠ connection dropped after ' + uptime + ' s (' + details
+                            + ') — possible proxy idle timeout');
+                    }
+                }
+            };
+        });
+    })();
+</script>
 </body>
 </html>
