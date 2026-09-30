@@ -127,6 +127,8 @@ exports.handleWebSocket = function (req) {
         subProtocols: ['text'],
         data: {
             request: JSON.stringify(req, undefined, 2),
+            // webSocket data is a String map: event.data only ever holds strings
+            ackHeartbeat: String(req.params['ackHeartbeat'] === 'true'),
         },
     };
 
@@ -149,6 +151,12 @@ exports.webSocketEvent = function (event) {
     if (event.type === 'open') {
         webSocketLib.send(event.session.id, event.data.request);
     } else if (event.type === 'message') {
-        webSocketLib.send(event.session.id, event.message);
+        if (event.message.indexOf('heartbeat-') === 0) {
+            if (event.data.ackHeartbeat === 'true') {
+                webSocketLib.send(event.session.id, 'ack-' + event.message);
+            }
+        } else {
+            webSocketLib.send(event.session.id, event.message);
+        }
     }
 }

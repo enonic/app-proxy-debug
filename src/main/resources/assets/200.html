@@ -43,6 +43,10 @@
             margin-left: 10px;
         }
 
+        #ws-heartbeat-interval {
+            width: 4em;
+        }
+
         #ws-status {
             font-family: monospace;
             font-size: 14px;
@@ -63,6 +67,9 @@
     <button id="ws-close" disabled>Close</button>
     <label><input type="checkbox" id="ws-any-origin"> Allow any origin</label>
     <label><input type="checkbox" id="ws-keep-open"> Keep connection open</label>
+    <label><input type="checkbox" id="ws-heartbeat" disabled> Heartbeat every
+        <input type="number" id="ws-heartbeat-interval" min="1" value="30" disabled> s</label>
+    <label><input type="checkbox" id="ws-heartbeat-ack" disabled> Ack from server</label>
     <label><input type="checkbox" id="ws-no-session-binding"> Disable session binding</label>
 </div>
 <p id="ws-status"></p>
@@ -73,6 +80,9 @@
         const closeBtn = document.getElementById('ws-close');
         const anyOrigin = document.getElementById('ws-any-origin');
         const keepOpen = document.getElementById('ws-keep-open');
+        const heartbeat = document.getElementById('ws-heartbeat');
+        const heartbeatInterval = document.getElementById('ws-heartbeat-interval');
+        const heartbeatAck = document.getElementById('ws-heartbeat-ack');
         const noSessionBinding = document.getElementById('ws-no-session-binding');
         const status = document.getElementById('ws-status');
         const requestBlock = document.getElementById('ws-request-block');
@@ -80,11 +90,21 @@
 
         let socket;
         let uptimeTimer;
+        let heartbeatTimer;
         let userClosed = false;
 
         function setStatus(text) {
             status.textContent = text;
         }
+
+        function updateHeartbeatControls() {
+            heartbeat.disabled = !keepOpen.checked;
+            heartbeatInterval.disabled = !keepOpen.checked || !heartbeat.checked;
+            heartbeatAck.disabled = !keepOpen.checked || !heartbeat.checked;
+        }
+
+        keepOpen.addEventListener('change', updateHeartbeatControls);
+        heartbeat.addEventListener('change', updateHeartbeatControls);
 
         closeBtn.addEventListener('click', function () {
             if (socket) {
@@ -100,6 +120,8 @@
                 socket = undefined;
             }
             clearInterval(uptimeTimer);
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = undefined;
             closeBtn.disabled = true;
             userClosed = false;
             requestBlock.hidden = true;
@@ -111,6 +133,11 @@
             }
             if (noSessionBinding.checked) {
                 params.push('disableSessionBinding=true');
+            }
+            const useHeartbeat = keepOpen.checked && heartbeat.checked;
+            const useAck = useHeartbeat && heartbeatAck.checked;
+            if (useAck) {
+                params.push('ackHeartbeat=true');
             }
             const url = (location.protocol === 'https:' ? 'wss://' : 'ws://')
                 + location.host + '{{wsApiPath}}'
@@ -132,6 +159,26 @@
             let openedAt;
             let received = 0;
             let echoed = false;
+            let rtt;
+            const pendingHeartbeats = {};
+            let heartbeatsSent = 0;
+            let acks = 0;
+            let ackRtt;
+
+            function heartbeatSummary() {
+                return 'heartbeats ' + heartbeatsSent + ' sent'
+                    + (useAck ? ', ' + acks + ' acked' : '');
+            }
+
+            function connectedStatus() {
+                let text = '✓ connected · round-trip ' + rtt + ' ms · open for '
+                    + Math.round((Date.now() - openedAt) / 1000) + ' s';
+                if (heartbeatTimer) {
+                    text += ' · ' + heartbeatSummary()
+                        + (ackRtt !== undefined ? ' (last ack ' + ackRtt + ' ms)' : '');
+                }
+                return text;
+            }
 
             const echoTimeout = setTimeout(function () {
                 if (!echoed) {
@@ -159,17 +206,34 @@
                     }
                     echoed = true;
                     clearTimeout(echoTimeout);
-                    const rtt = Math.round(performance.now() - sentAt);
+                    rtt = Math.round(performance.now() - sentAt);
                     if (keepOpen.checked) {
                         closeBtn.disabled = false;
-                        setStatus('✓ connected · round-trip ' + rtt + ' ms · open for 0 s');
+                        if (useHeartbeat) {
+                            const seconds = Math.max(1, Number(heartbeatInterval.value) || 30);
+                            heartbeatTimer = setInterval(function () {
+                                const message = 'heartbeat-' + Date.now();
+                                pendingHeartbeats[message] = performance.now();
+                                heartbeatsSent++;
+                                ws.send(message);
+                                setStatus(connectedStatus());
+                            }, seconds * 1000);
+                        }
+                        setStatus(connectedStatus());
                         uptimeTimer = setInterval(function () {
-                            setStatus('✓ connected · round-trip ' + rtt + ' ms · open for '
-                                + Math.round((Date.now() - openedAt) / 1000) + ' s');
+                            setStatus(connectedStatus());
                         }, 1000);
                     } else {
                         setStatus('✓ connected · round-trip ' + rtt + ' ms');
                         ws.close(1000);
+                    }
+                } else if (event.data.indexOf('ack-') === 0) {
+                    const message = event.data.substring('ack-'.length);
+                    if (pendingHeartbeats[message] !== undefined) {
+                        acks++;
+                        ackRtt = Math.round(performance.now() - pendingHeartbeats[message]);
+                        delete pendingHeartbeats[message];
+                        setStatus(connectedStatus());
                     }
                 }
             };
@@ -177,6 +241,8 @@
             ws.onclose = function (event) {
                 clearTimeout(echoTimeout);
                 clearInterval(uptimeTimer);
+                clearInterval(heartbeatTimer);
+                heartbeatTimer = undefined;
                 closeBtn.disabled = true;
                 socket = undefined;
                 const details = 'code ' + event.code + (event.reason ? ', ' + event.reason : '');
@@ -189,8 +255,16 @@
                     }
                 } else if (keepOpen.checked) {
                     const uptime = Math.round((Date.now() - openedAt) / 1000);
+                    const heartbeatInfo = heartbeatsSent > 0 ? ', ' + heartbeatSummary() : '';
                     if (userClosed) {
-                        setStatus('✓ closed by user after ' + uptime + ' s');
+                        setStatus('✓ closed by user after ' + uptime + ' s' + heartbeatInfo);
+                    } else if (heartbeatsSent > 0 && !useAck) {
+                        setStatus('⚠ connection dropped after ' + uptime + ' s' + heartbeatInfo
+                            + ' (' + details + ') — client-to-server heartbeat was not enough;'
+                            + ' the proxy may need traffic both ways, try Ack from server');
+                    } else if (heartbeatsSent > 0) {
+                        setStatus('⚠ connection dropped after ' + uptime + ' s' + heartbeatInfo
+                            + ' (' + details + ') — dropped despite heartbeat, likely not an idle timeout');
                     } else {
                         setStatus('⚠ connection dropped after ' + uptime + ' s (' + details
                             + ') — possible proxy idle timeout');
